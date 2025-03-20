@@ -52,10 +52,18 @@ class Scraper:
       logger.error(f'Arvore da home page esta vazia!')
       return None
     list_of_categories = tree.xpath('//ul[ @data-js="nav-categs-departments" ]/li//a//text()')
-    list_of_categories.pop()
+    urls_of_categories = tree.xpath('//ul[ @data-js="nav-categs-departments" ]/li//a//@href')
+    for _ in range(2): list_of_categories.pop()
+    for _ in range(2): urls_of_categories.pop()
     if self.categories is None:
-      self.categories = list_of_categories
-    return list_of_categories
+      self.categories = {
+      'categories': list_of_categories,
+      'links': urls_of_categories
+      }
+    return {
+      'categories': list_of_categories,
+      'links': urls_of_categories
+      }
 
   def getTree(self, url: str): 
     '''
@@ -71,6 +79,10 @@ class Scraper:
     
     except Exception as e:
       logger.critical(f'Erro ao fazer requisição na url: {url} - Excessao: {e}')
+
+  def getProductImg(self, tree) -> list[str]:
+    imgs_url = tree.xpath("//figure[ contains(@class, 'ui-pdp-gallery__figure') ]/img[ contains(@class, 'ui-pdp-image ') and contains(@class, 'ui-pdp-gallery__figure__image') and not(contains(@src, 'data:image/gif')) ]/@src")
+    return imgs_url
 
   def getProductName(self, tree) -> str | None:
     product_name = tree.xpath("//h1[contains(@class, 'ui-pdp-title')]//text()")
@@ -99,21 +111,14 @@ class Scraper:
     rating = tree.xpath("//div[@data-testid='rating-component']//p[contains(@class, 'ui-review-capability__rating__average ')]//text()")
     return float(rating[0])
 
-  def getProductDescription(self, tree = None, url: str = None) -> list[str] | None:
-    if url is not None and tree is None:
-      tree = self.getTree(url)
-      if tree is None:
-        return None
-      description = tree.xpath("//div[contains(@class, 'ui-pdp-description')]//p[contains(@class, 'ui-pdp-description__content')]//text()")
-      return description
-    
+  def getProductDescription(self, tree = None) -> list[str] | None:
     description = tree.xpath("//div[contains(@class, 'ui-pdp-description')]//p[contains(@class, 'ui-pdp-description__content')]//text()")
     return description
 
   def scrapeProduct(self, url: str) -> dict | None:
     '''
       Raspa o produto da url passada como parametro,
-      valida se o nome, preço, avaliação e descrição
+      valida se os links das imagens, nome, preço, avaliação e descrição
       foram coletador e retorna um dicionario com os dados
     '''
     tree = self.getTree(url)
@@ -125,29 +130,35 @@ class Scraper:
     price = self.getPrice(tree)
     rating = self.getRating(tree)
     description = self.getProductDescription(tree)
+    imgs_ulr = self.getProductImg(tree)
 
     if not product_name:
       logger.debug(f'Nome do produto: {url} - esta vazio!')
       return None
     
     elif not price:
-      logger.debug(f'Preço do produto: {url} - esta vazio!')
+      logger.debug(f'Preço do produto: {product_name} - esta vazio!')
       return None
     
     elif not rating:
-      logger.debug(f'A avaliação do produto: {url} - esta vazia!')
+      logger.debug(f'A avaliação do produto: {product_name} - esta vazia!')
       return None
     
     elif not description:
-      logger.debug(f'A descrição do produto: {url} - esta vazia!')
+      logger.debug(f'A descrição do produto: {product_name} - esta vazia!')
       return None
     
-    logger.info(f'Dados do produto: {url} - obtidos!')
+    elif not description:
+      logger.debug(f'As imagens do produto: {product_name} - esta vazia!')
+      return None
+    
+    logger.info(f'Dados do produto: {product_name} - obtidos!')
     return {
       'product_name': product_name,
       'price': price,
       'rating': rating,
-      'description': description
+      'description': description,
+      'imgs': imgs_ulr
     }
 
   def scrapeProducts(self, urls: list | tuple) -> list[dict] | None:
